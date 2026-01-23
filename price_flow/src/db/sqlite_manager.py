@@ -83,118 +83,42 @@ class SQLiteManager(IDatabaseManager):
             await conn.execute("PRAGMA synchronous=NORMAL")
 
             # Таблицы
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT NOT NULL,
-                    first_name TEXT,
-                    user_tg_id INTEGER UNIQUE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    CHECK (length(username) >= 3),
-                    CHECK (length(first_name) >= 1),
-                    CHECK (user_tg_id > 0)
-                )
-            """)
+            sql_script = """
+            -- Таблица для кодов товаров поставщиков
+            CREATE TABLE IF NOT EXISTS supplier_product_codes (
+                -- Первичный ключ (автоинкремент)
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS carts (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    CHECK (length(name) >= 1)
-                )
-            """)
+                -- Код товара у поставщика
+                code INTEGER NOT NULL CHECK (code > 0),
 
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS user_cart (
-                    user_id TEXT NOT NULL,
-                    cart_id TEXT NOT NULL,
-                    role TEXT DEFAULT 'viewer',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (user_id, cart_id),
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
-                    CHECK (role IN ('owner', 'editor', 'viewer'))
-                )
-            """)
+                -- Наименование товара поставщика
+                name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
 
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS products (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    price REAL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP,
-                    CHECK (length(name) >= 1),
-                    CHECK (price >= 0)
-                )
-            """)
+                -- Группа товаров
+                product_group TEXT,
 
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS cart_product (
-                    cart_id TEXT NOT NULL,
-                    product_id TEXT NOT NULL,
-                    quantity INTEGER DEFAULT 1,
-                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (cart_id, product_id),
-                    FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE CASCADE,
-                    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-                    CHECK (quantity > 0)
-                )
-            """)
+                -- Подгруппа товаров
+                subgroup TEXT,
 
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS cart_product_archive (
-                    cart_id TEXT NOT NULL,
-                    product_id TEXT NOT NULL,
-                    quantity INTEGER DEFAULT 1,
-                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (cart_id, product_id, removed_at),
-                    FOREIGN KEY (cart_id) REFERENCES carts(id) ON DELETE SET NULL,
-                    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-                    CHECK (quantity > 0)
-                )
-            """)
+                -- Идентификатор поставщика
+                supplier_id INTEGER NOT NULL,
 
-            await conn.execute("""
-                CREATE TRIGGER IF NOT EXISTS update_cart_archive_on_delete
-                BEFORE DELETE ON carts
-                FOR EACH ROW
-                BEGIN
-                    UPDATE cart_product_archive
-                    SET cart_id = '---'
-                    WHERE cart_id = OLD.id;
-                END;
-            """)
+                -- Уникальность связки (код поставщика + код товара)
+                CONSTRAINT unique_supplier_code UNIQUE (code, supplier_id)
+            );
 
-            # Индексы для улучшения производительности
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_users_tg_id ON users(user_tg_id)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_user_cart_user ON user_cart(user_id)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_user_cart_cart ON user_cart(cart_id)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cart_product_cart ON "
-                "cart_product(cart_id)"
-            )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cart_product_product ON "
-                "cart_product(product_id)"
-            )
+            -- Индекс для быстрого поиска по поставщику и коду
+            CREATE INDEX IF NOT EXISTS idx_supplier_code
+            ON supplier_product_codes (supplier_id, code);
 
+            -- Индекс для поиска по названию товара
+            CREATE INDEX IF NOT EXISTS idx_product_name
+            ON supplier_product_codes (name);
+
+            """
+
+            await conn.executescript(sql_script)
             await conn.commit()
             logger.info("SQLite database initialized asynchronously")
 

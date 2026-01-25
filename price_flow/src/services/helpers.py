@@ -82,10 +82,10 @@ def _perform_extraction(zip_path: Path, extract_to: Path, password: str | None) 
             try:
                 zip_ref.extractall(extract_to, pwd=pwd_bytes)
             except RuntimeError as e:
-                _handle_runtime_error(e)
+                _handle_runtime_error(zip_path, e)
                 return False
             except zipfile.BadZipFile as e:
-                _handle_zip_extraction_error(f"Ошибка при чтении архива: {e}")
+                _handle_zip_extraction_error(zip_path, f"Ошибка при чтении архива: {e}")
                 return False
             # Логируем успешную распаковку
             _log_extraction_success(extract_to, zip_ref)
@@ -93,19 +93,21 @@ def _perform_extraction(zip_path: Path, extract_to: Path, password: str | None) 
 
     except zipfile.BadZipFile as e:
         _handle_zip_extraction_error(
-            f"Файл поврежден или не является ZIP архивом: {zip_path}: {e}"
+            zip_path, f"Файл поврежден или не является ZIP архивом: {zip_path}: {e}"
         )
         return False
 
 
-def _handle_runtime_error(error: RuntimeError) -> None:
+def _handle_runtime_error(zip_path: Path, error: RuntimeError) -> None:
     """Обрабатывает RuntimeError при распаковке."""
     error_msg = str(error).lower()
 
     if any(keyword in error_msg for keyword in ["password", "encrypted"]):
-        _handle_zip_extraction_error("Архив защищен паролем или пароль неверен.")
+        _handle_zip_extraction_error(
+            zip_path, "Архив защищен паролем или пароль неверен."
+        )
 
-    _handle_zip_extraction_error(f"Ошибка распаковки: {error}")
+    _handle_zip_extraction_error(zip_path, f"Ошибка распаковки: {error}")
 
 
 def _log_extraction_success(extract_to: Path, zip_ref: zipfile.ZipFile) -> None:
@@ -130,5 +132,5 @@ def _log_extraction_success(extract_to: Path, zip_ref: zipfile.ZipFile) -> None:
             logger.info(f"  ... и еще {remaining} файлов")
 
 
-def _handle_zip_extraction_error(message: str) -> bool:
-    raise ZipExtractionError(message)
+def _handle_zip_extraction_error(zip_path: Path, message: str) -> bool:
+    raise ZipExtractionError(zip_path, message)

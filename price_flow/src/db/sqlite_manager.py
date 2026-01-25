@@ -14,6 +14,8 @@ from core.logger import logger
 from core.settings import settings
 from interfaces.db.base import IDatabaseManager, ITransactionManager
 
+from .sql_scripts import sql_script_create_table
+
 
 class SQLiteTransactionManager(ITransactionManager):
     """Async SQLite transaction manager."""
@@ -59,7 +61,6 @@ class SQLiteManager(IDatabaseManager):
     @asynccontextmanager
     async def get_connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Async context manager for database connections."""
-        # Используем пул соединений для лучшей производительности
         logger.info(f"Initializing SQLite database at {self.db_path}")
         conn = await aiosqlite.connect(
             str(self.db_path),
@@ -81,44 +82,8 @@ class SQLiteManager(IDatabaseManager):
             await conn.execute("PRAGMA journal_mode=WAL")
             await conn.execute("PRAGMA foreign_keys=ON")
             await conn.execute("PRAGMA synchronous=NORMAL")
+            await conn.executescript(sql_script_create_table)
 
-            # Таблицы
-            sql_script = """
-            -- Таблица для кодов товаров поставщиков
-            CREATE TABLE IF NOT EXISTS supplier_product_codes (
-                -- Первичный ключ (автоинкремент)
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-                -- Код товара у поставщика
-                code INTEGER NOT NULL CHECK (code > 0),
-
-                -- Наименование товара поставщика
-                name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
-
-                -- Группа товаров
-                product_group TEXT,
-
-                -- Подгруппа товаров
-                subgroup TEXT,
-
-                -- Идентификатор поставщика
-                supplier_id INTEGER NOT NULL,
-
-                -- Уникальность связки (код поставщика + код товара)
-                CONSTRAINT unique_supplier_code UNIQUE (code, supplier_id)
-            );
-
-            -- Индекс для быстрого поиска по поставщику и коду
-            CREATE INDEX IF NOT EXISTS idx_supplier_code
-            ON supplier_product_codes (supplier_id, code);
-
-            -- Индекс для поиска по названию товара
-            CREATE INDEX IF NOT EXISTS idx_product_name
-            ON supplier_product_codes (name);
-
-            """
-
-            await conn.executescript(sql_script)
             await conn.commit()
             logger.info("SQLite database initialized asynchronously")
 

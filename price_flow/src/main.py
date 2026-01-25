@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, ORJSONResponse
 
 from api.health_checker import healht_router
+from api.v1.prices.load_supplier_product_codes import load_supplier_product_codes_router
 from core.exceptions import BaseAppException
 from core.logger import LOGGING_CONFIG, logger
 from core.settings import settings
@@ -12,9 +13,11 @@ from schemas.response_schemas import ErrorResponse
 
 def setup_routes(app: FastAPI) -> None:
     """Настройка маршрутов приложения."""
-    # app.include_router(b24_router, prefix="/api/v1/b24", tags=["b24"])
+    app.include_router(
+        load_supplier_product_codes_router, prefix="/api/v1/prices", tags=["prices"]
+    )
     # app.include_router(test_router, prefix="/api/v1/test", tags=["test"])
-    app.include_router(healht_router, prefix="/api/v1", tags=["health"])
+    app.include_router(healht_router, prefix="/api", tags=["health"])
 
 
 def register_exception_handler(app: FastAPI) -> None:

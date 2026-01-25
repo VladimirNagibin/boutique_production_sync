@@ -13,6 +13,7 @@ import aiofiles.os as aios  # type: ignore[import-untyped]
 from fastapi import Depends, UploadFile
 
 from core.exceptions import (
+    DatabaseAppError,
     DataProcessingError,
     FileAppNotFoundError,
     FileNotZipError,
@@ -23,6 +24,7 @@ from core.exceptions import (
 from core.logger import logger
 from core.settings import settings
 from db.factory import AsyncDatabaseFactory
+from interfaces.db.base import IDatabaseManager
 from repositories.supplier_codes_repo import SupplierCodesRepo, get_supplier_codes_repo
 from schemas.response_schemas import SuccessResponse
 from services.helpers import extract_zip
@@ -48,12 +50,85 @@ class LoaderCodes:
         max_file_size: int | None = None,
     ) -> None:
         self.supplier_codes_repo = supplier_codes_repo
-        self.db_manager = AsyncDatabaseFactory.get_manager()
+        self._db_manager: IDatabaseManager | None = None
+        self._db_manager_lock = asyncio.Lock()
         self.upload_dir = settings.BASE_DIR / Path(upload_dir or UPLOAD_DIR)
         self.max_file_size = int(max_file_size or MAX_FILE_SIZE)
 
         # Создаем директорию для загрузок при инициализации
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+
+    async def _get_db_manager(self) -> IDatabaseManager:
+        """
+        Ленивая инициализация менеджера БД.
+
+        Returns:
+            Менеджер БД
+
+        Raises:
+            DatabaseError: Если не удалось инициализировать менеджер
+        """
+        if self._db_manager is None:
+            async with self._db_manager_lock:
+                if self._db_manager is None:  # Double-check locking
+                    try:
+                        self._db_manager = await AsyncDatabaseFactory.get_manager()
+                        logger.debug("Менеджер БД успешно инициализирован")
+                    except Exception as e:
+                        logger.error(
+                            "Ошибка инициализации менеджера БД",
+                            extra={"error": str(e)},
+                            exc_info=True,
+                        )
+                        raise DatabaseAppError(
+                            message=(
+                                "Не удалось инициализировать менеджер базы данных: "
+                                f"{e!s}"
+                            )
+                        ) from e
+        return self._db_manager
+
+    async def cleanup(self) -> None:
+        """Очистка ресурсов."""
+        if self._db_manager:
+            try:
+                await self._db_manager.close()
+                logger.debug("Менеджер БД закрыт")
+
+            except asyncio.CancelledError:
+                # Обработка отмены задачи
+                logger.warning("Очистка ресурсов была отменена")
+                raise  # Пробрасываем дальше для правильной обработки отмены
+
+            except ConnectionError as e:
+                # Ошибки соединения с БД
+                logger.error(f"Ошибка соединения при закрытии менеджера БД: {e}")
+
+            except TimeoutError as e:
+                # Таймаут при закрытии соединения
+                logger.warning(f"Таймаут при закрытии менеджера БД: {e}")
+
+            except RuntimeError as e:
+                # Ошибки выполнения (например, уже закрыто)
+                if "closed" in str(e).lower() or "not connected" in str(e).lower():
+                    logger.debug(f"Менеджер БД уже закрыт: {e}")
+                else:
+                    logger.error(f"Ошибка выполнения при закрытии менеджера БД: {e}")
+
+            except AttributeError as e:
+                # Если у менеджера нет метода close()
+                logger.error(f"Менеджер БД не поддерживает метод close(): {e}")
+
+            except Exception as e:  # noqa: BLE001
+                # Обработка любых других неожиданных ошибок с логированием
+                logger.error(
+                    f"Неожиданная ошибка при очистке ресурсов: {e}", exc_info=True
+                )
+
+            finally:
+                # Всегда сбрасываем ссылку на менеджер
+                self._db_manager = None
+                logger.debug("Ссылка на менеджер БД сброшена")
 
     async def load_file(self, file: UploadFile) -> SuccessResponse:
         """

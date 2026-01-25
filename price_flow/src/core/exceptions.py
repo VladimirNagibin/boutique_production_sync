@@ -111,7 +111,17 @@ class FileUploadError(FileAppException):
         super().__init__(path, error_code="FILE_UPLOAD_ERROR", message=message)
 
 
-class DatabaseLoadError(BaseAppException):
+class DatabaseAppError(BaseAppException):
+    """Ошибка работы с БД."""
+
+    def __init__(
+        self, message: str | None = None, error_code: str = "ERROR_WORKING_WITH_DB"
+    ):
+        message = message or "Ошибка работы с БД"
+        super().__init__(error_code=error_code, message=message)
+
+
+class DatabaseLoadError(DatabaseAppError):
     """Ошибка загрузки данных в БД."""
 
     def __init__(

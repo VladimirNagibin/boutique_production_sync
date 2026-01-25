@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from api.deps import verify_api_key
 from schemas.response_schemas import SuccessResponse
-from services.prices.load_all_codes import LoaderCodes, get_loader_codes
+from services.prices.load_codes import LoaderCodes, get_loader_codes
 
 
 load_supplier_product_codes_router = APIRouter(dependencies=[Depends(verify_api_key)])

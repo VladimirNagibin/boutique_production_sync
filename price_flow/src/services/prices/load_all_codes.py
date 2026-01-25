@@ -54,10 +54,10 @@ class LoaderCodes:
         unpacked_file_path = str(Path(zip_file_path).parent / filename)
         if not self.unzip_file(zip_file_path):
             raise
-        await self.load_file_to_db(unpacked_file_path)
+        result = await self.load_file_to_db(unpacked_file_path)
         await remove_file_async(zip_file_path)
         await remove_file_async(unpacked_file_path)
-        return SuccessResponse(message="success")
+        return SuccessResponse(message="success", details=result)
 
     async def upload_file(
         self, file: UploadFile, save_subpath: str | None = None
@@ -334,11 +334,10 @@ class LoaderCodes:
         save_dir = self._get_save_directory(save_subpath)
         return extract_zip(zip_path=zip_path, extract_to=save_dir)
 
-    async def load_file_to_db(self, unpacked_file_path: str) -> None:
-        await self.supplier_codes_repo.load_data(
+    async def load_file_to_db(self, unpacked_file_path: str) -> dict[str, Any]:
+        return await self.supplier_codes_repo.load_data(
             unpacked_file_path, "supplier_product_codes"
         )
-        logger.info(f"Load table in db: {unpacked_file_path}")
 
 
 async def remove_file_async(file_path: str | Path) -> bool:

@@ -16,8 +16,8 @@ class FileAppException(BaseAppException):
     def __init__(
         self,
         path: Path | str,
-        message: str | None = None,
         error_code: str = "FILE_PROCESSING_ERROR",
+        message: str | None = None,
     ):
         path_str = str(path)
         message = message or f"Ошибка при работе с файлом: {path_str}"
@@ -25,7 +25,7 @@ class FileAppException(BaseAppException):
         super().__init__(error_code, message)
 
 
-class ZipFileNotFoundError(FileAppException, FileNotFoundError):
+class FileAppNotFoundError(FileAppException, FileNotFoundError):
     """Исключение, если ZIP-архив не найден."""
 
     def __init__(self, path: Path | str, message: str | None = None) -> None:
@@ -87,3 +87,28 @@ class FileSizeError(FileAppException):
 
     def __str__(self) -> str:
         return self.message
+
+
+class CSVParsingError(FileAppException):
+    """Ошибка парсинга CSV файла."""
+
+    def __init__(
+        self,
+        path: Path | str,
+        message: str | None = None,
+    ):
+        path_str = str(path)
+        message = message or f"Ошибка парсинга CSV файла: {path_str}"
+        self.path = path_str
+        super().__init__(path, error_code="CSV_FILE_PARSING_ERROR", message=message)
+
+
+class DatabaseLoadError(BaseAppException):
+    """Ошибка загрузки данных в БД."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+    ):
+        message = message or "Ошибка загрузки данных в БД"
+        super().__init__(error_code="ERROR_LOADING_DATA_TO_DB", message=message)

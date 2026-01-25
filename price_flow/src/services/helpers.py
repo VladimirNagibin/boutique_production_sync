@@ -2,7 +2,7 @@ import zipfile
 
 from pathlib import Path
 
-from core.exceptions import ZipExtractionError, ZipFileNotFoundError
+from core.exceptions import FileAppNotFoundError, ZipExtractionError
 from core.logger import logger
 
 
@@ -43,7 +43,7 @@ def extract_zip(
         return _perform_extraction(zip_path_obj, extract_to_obj, password)
 
     # Ловим кастомные исключения приложения
-    except ZipFileNotFoundError as e:
+    except FileAppNotFoundError as e:
         logger.error(e)
         return False
 
@@ -58,9 +58,9 @@ def _validate_file_exists(path: Path) -> None:
     Это позволяет сделать основной код чище и избежать абстракции raise.
     """
     if not path.exists():
-        raise ZipFileNotFoundError(path, f"Файл не найден: {path}")
+        raise FileAppNotFoundError(path, f"Файл не найден: {path}")
     if not path.is_file():
-        raise ZipFileNotFoundError(path, f"Путь не является файлом: {path}")
+        raise FileAppNotFoundError(path, f"Путь не является файлом: {path}")
 
 
 def _get_extraction_directory(zip_path: Path, extract_to: str | Path | None) -> Path:

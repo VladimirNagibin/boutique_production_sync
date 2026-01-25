@@ -24,6 +24,9 @@ class FileAppException(BaseAppException):
         self.path = path_str
         super().__init__(error_code, message)
 
+    def __str__(self) -> str:
+        return self.message
+
 
 class FileAppNotFoundError(FileAppException, FileNotFoundError):
     """Исключение, если ZIP-архив не найден."""
@@ -34,9 +37,6 @@ class FileAppNotFoundError(FileAppException, FileNotFoundError):
         super().__init__(
             path=path_str, message=message, error_code="ZIP_FILE_NOT_FOUND"
         )
-
-    def __str__(self) -> str:
-        return self.message
 
 
 class ZipExtractionError(FileAppException):
@@ -60,9 +60,6 @@ class FileNotZipError(FileAppException):
             path=path_str, message=message, error_code="FILE_NOT_ZIP_ERROR"
         )
 
-    def __str__(self) -> str:
-        return self.message
-
 
 class FileSizeError(FileAppException):
     """Размер файла превышает максимальный."""
@@ -85,9 +82,6 @@ class FileSizeError(FileAppException):
 
         super().__init__(path=path_str, message=message, error_code="FILE_SIZE_ERROR")
 
-    def __str__(self) -> str:
-        return self.message
-
 
 class CSVParsingError(FileAppException):
     """Ошибка парсинга CSV файла."""
@@ -103,6 +97,20 @@ class CSVParsingError(FileAppException):
         super().__init__(path, error_code="CSV_FILE_PARSING_ERROR", message=message)
 
 
+class FileUploadError(FileAppException):
+    """Ошибка загрузки файла."""
+
+    def __init__(
+        self,
+        path: Path | str,
+        message: str | None = None,
+    ):
+        path_str = str(path)
+        message = message or f"Ошибка загрузки файла: {path_str}"
+        self.path = path_str
+        super().__init__(path, error_code="FILE_UPLOAD_ERROR", message=message)
+
+
 class DatabaseLoadError(BaseAppException):
     """Ошибка загрузки данных в БД."""
 
@@ -112,3 +120,14 @@ class DatabaseLoadError(BaseAppException):
     ):
         message = message or "Ошибка загрузки данных в БД"
         super().__init__(error_code="ERROR_LOADING_DATA_TO_DB", message=message)
+
+
+class DataProcessingError(BaseAppException):
+    """Ошибка обработки данных."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+    ):
+        message = message or "Ошибка обработки данных"
+        super().__init__(error_code="DATA_PROCESSING_ERROR", message=message)

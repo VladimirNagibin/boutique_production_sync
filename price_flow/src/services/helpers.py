@@ -43,13 +43,9 @@ def extract_zip(
         return _perform_extraction(zip_path_obj, extract_to_obj, password)
 
     # Ловим кастомные исключения приложения
-    except FileAppNotFoundError as e:
+    except (FileAppNotFoundError, ZipExtractionError) as e:
         logger.error(e)
-        return False
-
-    except ZipExtractionError as e:
-        logger.error(e)
-        return False
+        raise
 
 
 def _validate_file_exists(path: Path) -> None:

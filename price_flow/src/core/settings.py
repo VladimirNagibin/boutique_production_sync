@@ -6,8 +6,26 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):  # type: ignore[misc]
+class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
+
+    PROJECT_NAME: str = "Price Flow"
+
+    APP_HOST: str = Field(
+        default="127.0.0.1",
+        description="Host to bind to. Use '0.0.0.0' only in Docker containers.",
+    )
+
+    APP_PORT: int = Field(
+        default=8000,
+        ge=1024,  # Не используем привилегированные порты (<1024)
+        le=65535,
+        description="Port to bind to (1024-65535)",
+    )
+
+    APP_RELOAD: bool = Field(
+        default=True, description="Enable auto-reload. Should be False in production."
+    )
 
     BASE_DIR: str = Field(
         default_factory=lambda: str(Path(__file__).resolve().parent.parent),
@@ -40,6 +58,12 @@ class Settings(BaseSettings):  # type: ignore[misc]
         default=1,
         gt=0,
         description="Pool size for database connections",
+    )
+
+    SECRET_KEY: str = Field(
+        default="your-secret-key-change-in-production",
+        min_length=32,
+        description="Secret key",
     )
 
     @field_validator("LOG_LEVEL")

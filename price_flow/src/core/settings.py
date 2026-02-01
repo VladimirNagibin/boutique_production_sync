@@ -66,6 +66,11 @@ class Settings(BaseSettings):
         description="Secret key",
     )
 
+    USER_GMAIL: str = "user_gmail"
+    PASS_GMAIL: str = ""
+    API_KEY_GOOGLE: str = "api_key_google"
+    SENDER_PRICE_LANSETI: str = "price@mail.ru"
+
     @field_validator("LOG_LEVEL")
     @classmethod
     def validate_log_level(cls, v: str) -> str:

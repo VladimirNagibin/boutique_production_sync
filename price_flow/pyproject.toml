@@ -16,6 +16,10 @@ dependencies = [
     "orjson>=3.11.5",
     "aiofiles>=25.1.0",
     "pandas>=3.0.0",
+    "bs4>=0.0.2",
+    "google-api-python-client>=2.188.0",
+    "xlwt>=1.3.0",
+    "openpyxl>=3.1.5",
 ]
 
 [project.optional-dependencies]

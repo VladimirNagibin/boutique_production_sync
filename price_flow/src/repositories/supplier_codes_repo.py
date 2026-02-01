@@ -427,6 +427,8 @@ class SupplierCodesRepo:
 
         # Преобразуем числовые колонки
         for column in result_df.columns:
+            if column.lower() in ["name", "product_group", "subgroup"]:
+                continue
             # Пробуем преобразовать в числа, если возможно
             try:
                 # Проверяем, можно ли преобразовать колонку в числа
@@ -465,6 +467,29 @@ class SupplierCodesRepo:
                 logger.debug(f"Создан индекс: {index_sql}")
             except sqlite3.Error as e:
                 logger.warning(f"Не удалось создать индекс: {e}")
+
+    def get_supplier_data(self, supplier_id: int) -> pd.DataFrame:
+        """Получает данные поставщика из SQLite.
+
+        Args:
+            supplier_id: Идентификатор поставщика
+
+        Returns:
+            DataFrame с колонками: code, product_group, subgroup
+        """
+        conn = sqlite3.connect(settings.DB_SQLITE_PATH)
+        query = """
+        SELECT code, product_group, subgroup
+        FROM supplier_product_codes
+        WHERE supplier_id = ?
+        """
+        df_db = pd.read_sql_query(query, conn, params=(supplier_id,))
+        conn.close()
+
+        # Преобразуем code в строку для гарантированного совпадения
+        df_db["code"] = df_db["code"].astype(str).str.strip()
+
+        return df_db
 
 
 def get_supplier_codes_repo() -> SupplierCodesRepo:

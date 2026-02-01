@@ -1,12 +1,16 @@
 from pathlib import Path
+from typing import Any
 
 
 class BaseAppException(Exception):
     """Базовое исключение для приложения."""
 
-    def __init__(self, error_code: str, message: str) -> None:
+    def __init__(
+        self, error_code: str, message: str, details: Any | None = None
+    ) -> None:
         self.error_code = error_code
         self.message = message
+        self.details = details
         super().__init__(message)
 
 
@@ -18,25 +22,31 @@ class FileAppException(BaseAppException):
         path: Path | str,
         error_code: str = "FILE_PROCESSING_ERROR",
         message: str | None = None,
+        details: Any | None = None,
     ):
         path_str = str(path)
         message = message or f"Ошибка при работе с файлом: {path_str}"
         self.path = path_str
-        super().__init__(error_code, message)
+        self.details = details
+        super().__init__(error_code, message, details)
 
     def __str__(self) -> str:
         return self.message
 
 
 class FileAppNotFoundError(FileAppException, FileNotFoundError):
-    """Исключение, если ZIP-архив не найден."""
+    """Исключение, если файл не найден."""
 
-    def __init__(self, path: Path | str, message: str | None = None) -> None:
+    def __init__(
+        self,
+        path: Path | str,
+        message: str | None = None,
+        error_code: str | None = None,
+    ) -> None:
         path_str = str(path)
-        message = message or f"ZIP архив не найден: {path_str}"
-        super().__init__(
-            path=path_str, message=message, error_code="ZIP_FILE_NOT_FOUND"
-        )
+        message = message or f"Файл не найден: {path_str}"
+        error_code = error_code or "FILE_NOT_FOUND_ERROR"
+        super().__init__(path=path_str, message=message, error_code=error_code)
 
 
 class ZipExtractionError(FileAppException):
@@ -141,3 +151,68 @@ class DataProcessingError(BaseAppException):
     ):
         message = message or "Ошибка обработки данных"
         super().__init__(error_code="DATA_PROCESSING_ERROR", message=message)
+
+
+class PriceProcessingError(BaseAppException):
+    """Базовая ошибка обработки прайс-листа."""
+
+    def __init__(
+        self,
+        error_code: str = "PRICE_PROCESSING_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка обработки прайс-листа"
+        super().__init__(error_code, message, details)
+
+
+class EmailFetchError(PriceProcessingError):
+    """Ошибка при получении почты или парсинге письма."""
+
+    def __init__(
+        self,
+        error_code: str = "EMAIL_FETCH_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при получении почты или парсинге письма"
+        super().__init__(error_code, message, details)
+
+
+class DriveApiError(PriceProcessingError):
+    """Ошибка при работе с Google Drive API."""
+
+    def __init__(
+        self,
+        error_code: str = "DRIVE_API_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при работе с Google Drive API"
+        super().__init__(error_code, message, details)
+
+
+class ExcelProcessingError(PriceProcessingError):
+    """Ошибка при чтении или записи Excel."""
+
+    def __init__(
+        self,
+        error_code: str = "EXCEL_PROCESSING_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при чтении или записи Excel"
+        super().__init__(error_code, message, details)
+
+
+class SupplierDataError(PriceProcessingError):
+    """Ошибка при чтении или записи данных поставщика."""
+
+    def __init__(
+        self,
+        error_code: str = "SUPPLIER_DATA_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при чтении или записи данных поставщика"
+        super().__init__(error_code, message, details)

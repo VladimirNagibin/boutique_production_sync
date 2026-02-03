@@ -1,0 +1,5 @@
+services:
+  price_flow:
+    build:
+      context: ./price_flow
+      dockerfile: Dockerfile

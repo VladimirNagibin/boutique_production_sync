@@ -23,7 +23,7 @@ class AsyncDatabaseFactory:
         **kwargs: Any,
     ) -> IDatabaseManager:
         """Get async database manager instance."""
-        key = connection_string or str(settings.DB_SQLITE_PATH)
+        key = connection_string or str(settings.DB_SQLITE_PATH)  # type: ignore
 
         if key not in AsyncDatabaseFactory._instances:
             async with AsyncDatabaseFactory._lock:

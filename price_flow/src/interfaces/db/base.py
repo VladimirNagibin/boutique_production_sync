@@ -1,6 +1,7 @@
 """Abstract base classes defining async repository interfaces."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from contextlib import AbstractAsyncContextManager
 from typing import Any, Protocol, TypeVar
 from uuid import UUID
@@ -76,8 +77,13 @@ class IDatabaseManager(ABC):
         ...
 
     @abstractmethod
+    def get_db_dependency(self) -> AsyncGenerator[Any]:
+        """Get database connection as FastAPI dependency."""
+        ...
+
+    @abstractmethod
     async def execute_query(
-        self, query: str, params: tuple[Any] | None = None
+        self, query: str, params: tuple[Any, ...] | None = None
     ) -> list[Any]:
         """Execute raw SQL query asynchronously."""
         ...

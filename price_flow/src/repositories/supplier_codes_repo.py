@@ -23,7 +23,7 @@ from interfaces.db.base import IDatabaseManager
 
 
 class SupplierCodesRepo:
-    def __init__(self, db_path: str = str(settings.DB_SQLITE_PATH)) -> None:
+    def __init__(self, db_path: str = str(settings.DB_SQLITE_PATH)) -> None:  # type: ignore
         self.db_path = db_path
         self._db_manager: IDatabaseManager | None = None
 
@@ -289,8 +289,8 @@ class SupplierCodesRepo:
                 "name",
                 "supplier_id",
                 "id",
-                "product_group",
-                "subgroup",
+                "category",
+                "subcategory",
             ]
             missing_columns = [col for col in required_columns if col not in df.columns]
 
@@ -424,24 +424,20 @@ class SupplierCodesRepo:
         """
         # Создаем копию, чтобы не модифицировать оригинал
         result_df = df.copy()
-
-        # Преобразуем числовые колонки
-        for column in result_df.columns:
-            if column.lower() in ["name", "product_group", "subgroup"]:
-                continue
-            # Пробуем преобразовать в числа, если возможно
-            try:
-                # Проверяем, можно ли преобразовать колонку в числа
-                numeric_series = pd.to_numeric(result_df[column], errors="coerce")
-                if numeric_series.notna().any():  # Если есть числовые значения
-                    result_df[column] = numeric_series
-            except (ValueError, TypeError):
-                logger.debug(f"Ошибка преобразования колонки {column} в число")
-            except Exception as e:  # noqa: BLE001
-                # Другие ошибки логируем, но не прерываем выполнение
-                logger.debug(
-                    f"Неожиданная ошибка при оптимизации колонки '{column}': {e}"
-                )
+        column_types = {
+            'supplier_id': 'Int64',  # Int64 поддерживает NaN
+            'code': 'Int64',
+            'id': 'Int64',
+        }
+        # Применяем типы для существующих колонок
+        for column, dtype in column_types.items():
+            if column in result_df.columns:
+                try:
+                    # Сначала конвертируем в numeric, затем в Int64
+                    result_df[column] = pd.to_numeric(result_df[column], errors='coerce')
+                    result_df[column] = result_df[column].astype(dtype)
+                except Exception as e:
+                    logger.debug(f"Ошибка при конвертации колонки '{column}': {e}")
         return result_df
 
     def _create_indexes(self, conn: sqlite3.Connection, table_name: str) -> None:
@@ -458,7 +454,7 @@ class SupplierCodesRepo:
             f"CREATE INDEX IF NOT EXISTS idx_{table_name}_name "
             f"ON {table_name} (name)",
             f"CREATE INDEX IF NOT EXISTS idx_{table_name}_group "
-            f"ON {table_name} (product_group)",
+            f"ON {table_name} (category)",
         ]
 
         for index_sql in indexes:
@@ -475,11 +471,11 @@ class SupplierCodesRepo:
             supplier_id: Идентификатор поставщика
 
         Returns:
-            DataFrame с колонками: code, product_group, subgroup
+            DataFrame с колонками: code, category, subcategory
         """
-        conn = sqlite3.connect(settings.DB_SQLITE_PATH)
+        conn = sqlite3.connect(settings.DB_SQLITE_PATH)  # type: ignore
         query = """
-        SELECT code, product_group, subgroup
+        SELECT code, category, subcategory
         FROM supplier_product_codes
         WHERE supplier_id = ?
         """

@@ -2,6 +2,7 @@ import asyncio
 import binascii
 import email
 import imaplib
+import os
 import re
 
 from collections.abc import Callable
@@ -32,12 +33,8 @@ from core.exceptions import (
 from core.logger import logger
 from core.settings import settings
 from repositories.supplier_codes_repo import SupplierCodesRepo, get_supplier_codes_repo
-
-
-# Константы
-EMAIL_SCAN_LIMIT = 200  # Сколько последних писем проверять
-LINK_TRACKER_SUBSTR = "geteml.com/ru/mail_link_tracker"
-SUPPLIER_ID = 201
+from schemas.converter_schemas import UploadResult
+from services.converter import FileUploader, get_file_uploader
 
 
 class PriceLoader:
@@ -60,12 +57,18 @@ class PriceLoader:
                 keyword in name.lower() for keyword in ["лицензия", "***"]
             ),
             "Элит Парфюм",
-            "Ручки",
+            "Лицензия***",
         ),
         (
             lambda name: any(
                 keyword in name.lower()
-                for keyword in ["vintag", "винтаж", "novaya zarya", "косметика"]
+                for keyword in [
+                    "vintag",
+                    "винтаж",
+                    "novaya zarya",
+                    "косметика",
+                    "новая заря",
+                ]
             ),
             "NO",
             "NO",
@@ -81,6 +84,7 @@ class PriceLoader:
         self,
         settings: Any,
         supplier_codes_repo: SupplierCodesRepo,
+        file_uploader: FileUploader,
         supplier_id: int = DEFAULT_SUPPLIER_ID,
     ):
         """
@@ -93,6 +97,7 @@ class PriceLoader:
         """
         self.settings = settings
         self.supplier_codes_repo = supplier_codes_repo
+        self.file_uploader = file_uploader
         self.supplier_id = supplier_id
         self._drive_service = None
 
@@ -104,7 +109,7 @@ class PriceLoader:
         target_filename: str = (
             "Нал миниатюры дезодоранты тестеры основной прайс на элитку"
         ),
-    ) -> Path:
+    ) -> UploadResult:
         """
         Основной метод: получение ссылки -> поиск файла -> скачивание -> обработка.
 
@@ -152,7 +157,11 @@ class PriceLoader:
                 output_path, supplier_data
             )
 
-            # 6. Статистика
+            # 6. Конвертация
+            logger.info("Конвертация Excel файла...")
+            upload_result = self.file_uploader.upload_file(enriched_file_path)
+
+            # 7. Статистика
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
             logger.info(
                 f"Обработка завершена за {processing_time:.2f} секунд. "
@@ -169,7 +178,10 @@ class PriceLoader:
                 details=str(e),
             ) from e
         else:
-            return enriched_file_path
+            return upload_result
+        finally:
+            # await self._cleanup_temp_files([output_path, enriched_file_path])
+            await self._cleanup_temp_files([enriched_file_path])
 
     async def _get_latest_drive_link(self) -> str | None:
         """
@@ -832,7 +844,7 @@ class PriceLoader:
         try:
             merged_df = pd.merge(
                 excel_df,
-                supplier_data[["code", "product_group", "subgroup"]],
+                supplier_data[["code", "category", "subcategory"]],
                 left_on="Код",
                 right_on="code",
                 how="left",
@@ -842,7 +854,7 @@ class PriceLoader:
             merged_df = merged_df.drop(columns=["code"])
 
             # Статистика совпадений
-            matches = merged_df["product_group"].notna().sum()
+            matches = merged_df["category"].notna().sum()
             match_percentage = (matches / len(merged_df)) * 100
 
             logger.info(
@@ -893,8 +905,8 @@ class PriceLoader:
             if pd.notna(product_name):
                 for condition, group, subgroup in self.PRODUCT_NAME_RULES:
                     if condition(product_name):
-                        result_df.at[idx, "product_group"] = group
-                        result_df.at[idx, "subgroup"] = subgroup
+                        result_df.at[idx, "category"] = group
+                        result_df.at[idx, "subcategory"] = subgroup
                         result_df.at[idx, "_filled_by_rule"] = True
                         break
 
@@ -904,14 +916,14 @@ class PriceLoader:
         def _update_row(row: pd.Series) -> pd.Series:
             name = row["Наименование"]
             if any(keyword in name.lower() for keyword in ["лицензия", "***"]):
-                row["product_group"] = "Элит Парфюм"
-                row["subgroup"] = "Ручки"
+                row["category"] = "Элит Парфюм"
+                row["subcategory"] = "Лицензия***"
             elif any(
                 keyword in name.lower()
                 for keyword in ["vintag", "винтаж", "novaya zarya", "косметика"]
             ) or ("MONTALE" in name and "декодированный" in name):
-                row["product_group"] = "NO"
-                row["subgroup"] = "NO"
+                row["category"] = "NO"
+                row["subcategory"] = "NO"
             return row
 
         return df.apply(_update_row, axis=1)
@@ -924,19 +936,19 @@ class PriceLoader:
         result_df = df.copy()
 
         # Векторизованный подход для производительности
-        forward_filled = result_df[["product_group", "subgroup"]].ffill()
-        backward_filled = result_df[["product_group", "subgroup"]].bfill()
+        forward_filled = result_df[["category", "subcategory"]].ffill()
+        backward_filled = result_df[["category", "subcategory"]].bfill()
 
         # Маска строк, где значения вперед и назад совпадают
         mask = (
-            (forward_filled["product_group"] == backward_filled["product_group"])
-            & (forward_filled["subgroup"] == backward_filled["subgroup"])
-            & (result_df["product_group"].isna() | result_df["subgroup"].isna())
+            (forward_filled["category"] == backward_filled["category"])
+            & (forward_filled["subcategory"] == backward_filled["subcategory"])
+            & (result_df["category"].isna() | result_df["subcategory"].isna())
         )
 
         # Заполняем совпадающие строки
-        result_df.loc[mask, "product_group"] = forward_filled.loc[mask, "product_group"]
-        result_df.loc[mask, "subgroup"] = forward_filled.loc[mask, "subgroup"]
+        result_df.loc[mask, "category"] = forward_filled.loc[mask, "category"]
+        result_df.loc[mask, "subcategory"] = forward_filled.loc[mask, "subcategory"]
         result_df.loc[mask, "_filled_by_neighbors"] = True
 
         filled_count = mask.sum()
@@ -948,8 +960,8 @@ class PriceLoader:
     def _fill_missing_from_neighbors(
         self,
         df: pd.DataFrame,
-        group_col: str = "product_group",
-        subgroup_col: str = "subgroup",
+        group_col: str = "category",
+        subgroup_col: str = "subcategory",
     ) -> pd.DataFrame:
         """
         Заполняет пропущенные значения на основе совпадающих значений выше и ниже.
@@ -1100,12 +1112,12 @@ class PriceLoader:
                 excel_row = header_row + 2 + idx
 
                 # Записываем группу
-                group_value = row.get("product_group")
+                group_value = row.get("category")
                 if pd.notna(group_value):
                     ws[f"{group_col_letter}{excel_row}"] = group_value
 
                 # Записываем подгруппу
-                subgroup_value = row.get("subgroup")
+                subgroup_value = row.get("subcategory")
                 if pd.notna(subgroup_value):
                     ws[f"{subgroup_col_letter}{excel_row}"] = subgroup_value
 
@@ -1133,26 +1145,26 @@ class PriceLoader:
         ws = wb.active
 
         # Определяем колонки для новых данных
-        product_group_col = get_column_letter(
-            df_merged.columns.get_loc("product_group") + 1
+        category_col = get_column_letter(
+            df_merged.columns.get_loc("category") + 1
         )
-        subgroup_col = get_column_letter(df_merged.columns.get_loc("subgroup") + 1)
+        subgroup_col = get_column_letter(df_merged.columns.get_loc("subcategory") + 1)
 
         # Записываем заголовки новых колонок
-        ws[f"{product_group_col}{header_row + 1}"] = "Группа товара"
+        ws[f"{category_col}{header_row + 1}"] = "Группа товара"
         ws[f"{subgroup_col}{header_row + 1}"] = "Подгруппа"
 
         # Записываем данные
         for idx, row in df_merged.iterrows():
             excel_row = header_row + 2 + idx  # +2 потому что заголовок на header_row+1
 
-            # Записываем product_group
-            product_group = row["product_group"]
-            if pd.notna(product_group):
-                ws[f"{product_group_col}{excel_row}"] = product_group
+            # Записываем category
+            category = row["category"]
+            if pd.notna(category):
+                ws[f"{category_col}{excel_row}"] = category
 
             # Записываем subgroup
-            subgroup = row["subgroup"]
+            subgroup = row["subcategory"]
             if pd.notna(subgroup):
                 ws[f"{subgroup_col}{excel_row}"] = subgroup
 
@@ -1169,8 +1181,8 @@ class PriceLoader:
         """
         try:
             total_rows = len(df)
-            group_missing = df["product_group"].isna().sum()
-            subgroup_missing = df["subgroup"].isna().sum()
+            group_missing = df["category"].isna().sum()
+            subgroup_missing = df["subcategory"].isna().sum()
 
             group_fill_rate = ((total_rows - group_missing) / total_rows) * 100
             subgroup_fill_rate = ((total_rows - subgroup_missing) / total_rows) * 100
@@ -1178,22 +1190,67 @@ class PriceLoader:
             logger.info(
                 f"Статистика обработки:\n"
                 f"  Всего строк: {total_rows}\n"
-                f"  Заполнено product_group: {total_rows - group_missing} "
+                f"  Заполнено category: {total_rows - group_missing} "
                 f"({group_fill_rate:.1f}%)\n"
-                f"  Заполнено subgroup: {total_rows - subgroup_missing} "
+                f"  Заполнено subcategory: {total_rows - subgroup_missing} "
                 f"({subgroup_fill_rate:.1f}%)\n"
-                f"  Осталось пропусков product_group: {group_missing}\n"
+                f"  Осталось пропусков category: {group_missing}\n"
                 f"  Осталось пропусков subgroup: {subgroup_missing}"
             )
 
         except (KeyError, AttributeError, TypeError, ZeroDivisionError) as e:
             logger.warning(f"Не удалось собрать статистику: {e}")
 
+    async def _cleanup_temp_files(self, file_paths: list[Path]) -> None:
+        """
+        Асинхронно удаляет временные файлы.
+
+        Args:
+            file_paths: Список путей к файлам для удаления
+        """
+        for file_path in file_paths:
+            if file_path and file_path.exists():
+                try:
+                    # Асинхронное удаление файла
+                    await asyncio.to_thread(os.remove, file_path)
+                    logger.debug(f"Удален временный файл: {file_path}")
+
+                    # Попробуем удалить пустую директорию если она существует
+                    # parent_dir = file_path.parent
+                    # if parent_dir.exists() and parent_dir.is_dir():
+                    #     try:
+                    #         # Проверяем, пуста ли директория
+                    #         if not any(parent_dir.iterdir()):
+                    #             await asyncio.to_thread(parent_dir.rmdir)
+                    #             logger.debug(
+                    #                 f"Удалена пустая директория: {parent_dir}"
+                    #             )
+                    #     except OSError as e:
+                    #         # Игнорируем ошибки удаления директории
+                    #         #  (может быть не пуста)
+                    #         logger.debug(
+                    #             f"Не удалось удалить директорию {parent_dir}: {e}"
+                    #         )
+
+                except FileNotFoundError:
+                    logger.debug(f"Файл уже удален: {file_path}")
+                except PermissionError as e:
+                    logger.warning(f"Нет прав на удаление файла {file_path}: {e}")
+                except OSError as e:
+                    # Ловим все OS-специфичные ошибки
+                    logger.warning(f"Ошибка ОС при удалении файла {file_path}: {e}")
+                except RuntimeError as e:
+                    # Ошибки, связанные с asyncio.to_thread
+                    logger.warning(
+                        f"Ошибка выполнения при удалении файла {file_path}: {e}"
+                    )
+
 
 # Dependency для FastAPI
 def get_price_loader(
     settings: Annotated[Any, Depends(lambda: settings)],
     supplier_codes_repo: Annotated[SupplierCodesRepo, Depends(get_supplier_codes_repo)],
+    file_uploader: Annotated[FileUploader, Depends(get_file_uploader)],
     supplier_id: int = PriceLoader.DEFAULT_SUPPLIER_ID,
 ) -> PriceLoader:
     """
@@ -1210,5 +1267,6 @@ def get_price_loader(
     return PriceLoader(
         settings=settings,
         supplier_codes_repo=supplier_codes_repo,
+        file_uploader=file_uploader,
         supplier_id=supplier_id,
     )

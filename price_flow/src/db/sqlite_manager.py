@@ -3,7 +3,7 @@
 import asyncio
 import sqlite3
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -58,20 +58,32 @@ class SQLiteManager(IDatabaseManager):
         """Initialize database and connection pool."""
         await self._init_database()
 
+    async def get_db_connection(self) -> aiosqlite.Connection:
+        """Получить асинхронное соединение с SQLite"""
+        conn = await aiosqlite.connect(str(self.db_path))
+        conn.row_factory = aiosqlite.Row  # Возвращать строки как словари
+
+        return conn
+
     @asynccontextmanager
     async def get_connection(self) -> AsyncIterator[aiosqlite.Connection]:
         """Async context manager for database connections."""
-        logger.info(f"Initializing SQLite database at {self.db_path}")
-        conn = await aiosqlite.connect(
-            str(self.db_path),
-            # detect_types=sqlite3.PARSE_DECLTYPES,
-        )
-        conn.row_factory = aiosqlite.Row
+        # logger.info(f"Initializing SQLite database at {self.db_path}")
+        conn = await self.get_db_connection()
 
         try:
             yield conn
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
         finally:
             await conn.close()
+
+    async def get_db_dependency(self) -> AsyncGenerator[aiosqlite.Connection]:
+        """Dependency для FastAPI"""
+        async with self.get_connection() as conn:
+            yield conn
 
     async def _init_database(self) -> None:
         """Initialize database tables asynchronously."""
@@ -88,6 +100,16 @@ class SQLiteManager(IDatabaseManager):
             logger.info("SQLite database initialized asynchronously")
 
     async def execute_query(
+        self, query: str, params: tuple[Any] | None = None
+    ) -> list[Any]:
+        """Execute raw SQL query asynchronously."""
+        async with self.get_connection() as conn:
+            cursor = await conn.execute(query, params or ())
+            rows = await cursor.fetchall()
+            await cursor.close()
+            return [dict(row) for row in rows]
+
+    async def execute_query_(
         self, query: str, params: tuple[Any] | None = None
     ) -> list[Any]:
         """Execute raw SQL query asynchronously."""
@@ -147,3 +169,25 @@ class SQLiteManager(IDatabaseManager):
     ) -> SQLiteTransactionManager:
         """Create transaction manager for a connection."""
         return SQLiteTransactionManager(connection)
+
+    async def add_column_to_table(
+        self,
+        table_name: str | None = None,
+        column_def: str | None = None,
+    ):
+        """
+        Добавляет колонку к существующей таблице
+
+        Args:
+            table_name: имя таблицы
+            column_def: определение колонки (например: "new_column TEXT DEFAULT ''")
+        """
+        table_name = table_name or "supplier_clothing_codes"
+        column_def = column_def or "supplier_code"
+
+        # sql = f"ALTER TABLE {table_name} DROP COLUMN {column_def}"
+        sql = f"ALTER TABLE {table_name} ADD COLUMN description TEXT DEFAULT ''"
+        async with self.get_connection() as conn:
+            await conn.execute(sql)
+            await conn.commit()
+            logger.info(f"SQLite add column: {column_def} to table: {table_name}")

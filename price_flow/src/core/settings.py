@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     API_KEY_GOOGLE: str = "api_key_google"
     SENDER_PRICE_LANSETI: str = "price@mail.ru"
 
+    NULAN_PRICES_URL: str = "url"
+    NULAN_API_URL: str = "url"
+
     @field_validator("LOG_LEVEL")
     @classmethod
     def validate_log_level(cls, v: str) -> str:

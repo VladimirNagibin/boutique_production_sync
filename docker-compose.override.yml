@@ -6,3 +6,14 @@ services:
       - ./.env.price_flow
     ports:
      - 8000:8000
+  converter:
+    volumes:
+      - ./converter/src:/opt/app
+    env_file:
+      - ./.env.converter
+    ports:
+     - 8090:8000
+
+  redis:
+    ports:
+     - 6379:6379

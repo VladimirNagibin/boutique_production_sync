@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -216,3 +217,47 @@ class SupplierDataError(PriceProcessingError):
     ):
         message = message or "Ошибка при чтении или записи данных поставщика"
         super().__init__(error_code, message, details)
+
+
+class DownloadError(BaseAppException):
+    """Ошибка при скачивании файла."""
+
+    def __init__(
+        self,
+        error_code: str = "DOWNLOAD_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при скачивании файла"
+        super().__init__(error_code, message, details)
+
+
+class ApiError(BaseAppException):
+    """Ошибка при работе с API."""
+
+    def __init__(
+        self,
+        error_code: str = "API_ERROR",
+        message: str | None = None,
+        details: Any | None = None,
+    ):
+        message = message or "Ошибка при работе с API"
+        super().__init__(error_code, message, details)
+
+
+class ErrorMessages(StrEnum):
+    """
+    Перечисление текстовых сообщений об ошибках.
+    """
+    ERR_MSG_NOT_ZIP = "Файл должен быть в формате ZIP"
+    ERR_MSG_INVALID_ZIP = "Файл не является валидным ZIP архивом"
+    ERR_MSG_SIZE_LIMIT = "Размер файла превышает лимит"
+    ERR_MSG_SAVE_FAILED = "Ошибка при сохранении файла"
+    ERR_MSG_VALIDATION_FAILED = "Ошибка при проверке ZIP архива"
+    ERR_MSG_CSV_NOT_FOUND = "CSV файл не найден внутри архива"
+    ERR_MSG_UNZIP_FAILED = "Не удалось распаковать архив"
+
+    @property
+    def code(self) -> str:
+        """Возвращает код ошибки на основе имени."""
+        return self.name

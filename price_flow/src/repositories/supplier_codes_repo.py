@@ -79,6 +79,7 @@ class SupplierCodesRepo:
         # Запускаем тяжелую операцию в отдельном потоке
         try:
             # Запускаем синхронную операцию в отдельном потоке
+            await self._get_db_manager()
             result = await asyncio.to_thread(
                 self._sync_load_operation, csv_path, table_name
             )

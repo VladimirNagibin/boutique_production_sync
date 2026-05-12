@@ -167,11 +167,14 @@ class PriceLoader:
         """
         Асинхронная обертка для скачивания файла.
         """
-        await asyncio.to_thread(
-            self._download_file_sync,
-            url,
-            filename
-        )
+        try:
+            await asyncio.to_thread(
+                self._download_file_sync,
+                url,
+                filename
+            )
+        except Exception as e:
+            logger.error(f"Error load {filename}: {url} {e}")
 
     def _download_file_sync(self, url: str, original_filename: str) -> None:
         """

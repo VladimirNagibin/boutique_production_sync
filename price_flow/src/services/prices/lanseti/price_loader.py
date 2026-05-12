@@ -48,6 +48,7 @@ class PriceLoader:
     IMAP_HOST: ClassVar[str] = "imap.gmail.com"
     LINK_TRACKER_SUBSTR: ClassVar[str] = "geteml.com/ru/mail_link_tracker"
     DEFAULT_SUPPLIER_ID: ClassVar[int] = 201
+    TARGET_FILENAME: ClassVar[str] = "Нал основной прайс на элитку KZ"
 
     # Правила для автоматического заполнения
     PRODUCT_NAME_RULES: ClassVar[list[tuple[Callable[[str], bool], str, str]]] = [
@@ -86,6 +87,7 @@ class PriceLoader:
         supplier_codes_repo: SupplierCodesRepo,
         file_uploader: FileUploader,
         supplier_id: int = DEFAULT_SUPPLIER_ID,
+        target_filename: str = TARGET_FILENAME,
     ):
         """
         Инициализация сервиса.
@@ -99,6 +101,7 @@ class PriceLoader:
         self.supplier_codes_repo = supplier_codes_repo
         self.file_uploader = file_uploader
         self.supplier_id = supplier_id
+        self.target_filename = target_filename
         self._drive_service = None
 
         logger.info(f"Инициализирован PriceLoader для supplier_id={supplier_id}")
@@ -106,9 +109,10 @@ class PriceLoader:
     async def process_price(
         self,
         output_filename: str | None = None,
-        target_filename: str = (
-            "Нал миниатюры дезодоранты тестеры основной прайс на элитку"
-        ),
+        # target_filename: str = (
+        #     # "Нал миниатюры дезодоранты тестеры основной прайс на элитку"
+        #     "Нал основной прайс на элитку KZ"
+        # ),
     ) -> UploadResult:
         """
         Основной метод: получение ссылки -> поиск файла -> скачивание -> обработка.
@@ -126,9 +130,9 @@ class PriceLoader:
             logger.info(f"Найдена ссылка на Google Drive: {drive_link[:50]}...")  # type: ignore[index]
 
             # 2. Поиск файла в Google Drive
-            logger.info(f"Поиск файла '{target_filename}' в Google Drive...")
-            file_id = await self._find_file_in_drive(drive_link, target_filename)  # type: ignore[arg-type]
-            self._validate_file_id(file_id, target_filename, drive_link)  # type: ignore[arg-type]
+            logger.info(f"Поиск файла '{self.target_filename}' в Google Drive...")
+            file_id = await self._find_file_in_drive(drive_link, self.target_filename)  # type: ignore[arg-type]
+            self._validate_file_id(file_id, self.target_filename, drive_link)  # type: ignore[arg-type]
             logger.info(f"Найден файл с ID: {file_id}")
 
             # 3. Скачивание файла
@@ -141,11 +145,6 @@ class PriceLoader:
 
             logger.info(f"Скачивание файла в: {output_path}")
             await self._download_file(file_id, output_path)  # type: ignore[arg-type]
-
-            # test
-            # output_filename = "output_file.xlsx"
-            # output_path = settings.BASE_DIR / Path(f"uploads/{output_filename}")
-            # test
 
             # 4. Получение данных поставщика
             logger.info(f"Загрузка данных поставщика ID={self.supplier_id}...")

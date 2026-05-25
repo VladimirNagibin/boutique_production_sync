@@ -48,7 +48,7 @@ class PriceLoader:
     IMAP_HOST: ClassVar[str] = "imap.gmail.com"
     LINK_TRACKER_SUBSTR: ClassVar[str] = "geteml.com/ru/mail_link_tracker"
     DEFAULT_SUPPLIER_ID: ClassVar[int] = 201
-    TARGET_FILENAME: ClassVar[str] = "Нал основной прайс на элитку KZ"
+    TARGET_FILENAME: ClassVar[str] = "Нал основной прайс на элитку BY"
 
     # Правила для автоматического заполнения
     PRODUCT_NAME_RULES: ClassVar[list[tuple[Callable[[str], bool], str, str]]] = [

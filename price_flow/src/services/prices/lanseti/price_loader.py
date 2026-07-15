@@ -49,6 +49,9 @@ class PriceLoader:
     LINK_TRACKER_SUBSTR: ClassVar[str] = "geteml.com/ru/mail_link_tracker"
     DEFAULT_SUPPLIER_ID: ClassVar[int] = 201
     TARGET_FILENAME: ClassVar[str] = "Нал основной прайс на элитку BY"
+    # TARGET_FILENAME: ClassVar[str] = (
+    #     "Нал миниатюры дезодоранты тестеры основной прайс на элитку"
+    # )
 
     # Правила для автоматического заполнения
     PRODUCT_NAME_RULES: ClassVar[list[tuple[Callable[[str], bool], str, str]]] = [
